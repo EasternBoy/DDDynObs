@@ -11,12 +11,6 @@ mutable struct polyBound
     end
 end
 
-# mutable struct obstacle
-#     A::Matrix{Float64}
-#     b::Float64
-# end
-
-
 function robot_ode!(dx, u, x, t)
     ℓ = 1.8
     dx[1] = x[4]*cos(x[3])
@@ -76,4 +70,16 @@ function run!(robo::robot, in::Vector{Float64})
 end
 
 
-function run_obs!()
+mutable struct obstacle
+     A::Matrix{Float64}
+     b::Float64
+end
+
+# Circle obstacle
+
+function run_obs!(s::Int64, st::Float64, sce::Int64)
+    if sce == 1 #Straight obs
+    elseif sce == 2
+    else
+    end
+end
