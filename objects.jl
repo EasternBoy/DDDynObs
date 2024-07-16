@@ -3,13 +3,19 @@ mutable struct polyBound
     str_ang::Float64 # constant of bound constraint
     v_min::Float64 
     v_max::Float64 # constant of bound constraint
-    v_min::Float64 
-    v_max::Float64 # constant of bound constraint
+    a_min::Float64 
+    a_max::Float64 # constant of bound constraint
 
-    function polyBound(s_max::Float64, x_min::Float64, x_max::Float64, y_min::Float64, y_max::Float64)
-        return new(s_max, x_min, x_max, y_min, y_max)
+    function polyBound(str_ang::Float64, v_min::Float64, v_max::Float64, a_min::Float64, a_max::Float64)
+        return new(str_ang, v_min, v_max, a_min, a_max)
     end
 end
+
+# mutable struct obstacle
+#     A::Matrix{Float64}
+#     b::Float64
+# end
+
 
 function robot_ode!(dx, u, x, t)
     ℓ = 1.8
@@ -47,12 +53,39 @@ mutable struct robot
         obj.input   = [0., 0.]
 
         obj.traj   = Matrix{Float64}(undef, length(x0), 0)
-        obj.inarr  = Matrix{Float64}(undef, length(input), 0)
+        obj.traj   = [obj.traj x0]
+        obj.inarr  = Matrix{Float64}(undef, length(obj.input), 0)
+        obj.inarr  = [obj.inarr obj.input]
 
         obj.opti = JuMP.Model(Ipopt.Optimizer)
-        ODEprob  = OrdinaryDiffEq.ODEProblem(robot_ode!, obj.pose, (0.0, T), obj.input)
+        obj.ODEprob  = OrdinaryDiffEq.ODEProblem(robot_ode!, obj.pose, (0.0, T), obj.input)
 
         set_silent(obj.opti)
+        return obj
+    end
+end
+
+mutable struct obstacle
+    r::Float64 #radius
+    posn::Vector{Float64}
+    ns::Int64
+    mulpos::Matrix{Float64}
+    time::Vector{Float64}
+
+    traj::Matrix{Float64}
+    tseri::Vector{Float64}
+
+    function obstacle(r::Float64, posn::Vector{Float64}, ns::Int64)
+
+        obj        = new(r, posn, ns)
+        obj.mulpos = zeros(length(posn), ns)
+        obj.time   = zeros(ns)
+        for i in 1:ns
+            obj.mulpos[:,i] = posn
+        end
+        # obj.traj   = Matrix{Float64}(undef, length(posn), 0)
+        obj.traj   = obj.mulpos
+        obj.tseri  = obj.time
         return obj
     end
 end
@@ -70,16 +103,34 @@ function run!(robo::robot, in::Vector{Float64})
 end
 
 
-mutable struct obstacle
-     A::Matrix{Float64}
-     b::Float64
-end
+function run_obs!(obs::obstacle, s::Int64, st::Float64, sce::Int64)
+    ns = obs.ns
+    τ = st/ns
 
-# Circle obstacle
+    rng = Random.MersenneTwister(1234)
+    for i in 1:ns
+        obs.time[i] = s*st + i*τ
+    end
 
-function run_obs!(s::Int64, st::Float64, sce::Int64)
-    if sce == 1 #Straight obs
-    elseif sce == 2
+    if sce == 1 # Straight impact
+        vx = -3.
+        vy = 2sin(2(s*st + τ))
+        obs.mulpos[:,1] = obs.posn + τ*[vx, vy] + τ*randn(rng, Float64, (2))
+        for i in 1:ns-1
+            obs.mulpos[:,i+1] = obs.mulpos[:,i] + τ*[vx, vy] + τ*randn(rng, Float64, (2))
+        end
+        obs.posn = obs.mulpos[:,ns]
+
+    elseif sce == 2 # Circle vehicle
+        vx = 2cos(5(s*st + τ))
+        vy = 2sin(5(s*st + τ))
+        obs.mulpos[:,1] = obs.posn + τ*[vx, vy] + τ*randn(rng, Float64, (2))
+        for i in 1:ns-1
+            obs.mulpos[:,i+1] = obs.mulpos[:,i] + τ*[2cos(5(s*st + i*τ)), 2sin(5(s*st + i*τ))] + τ*randn(rng, Float64, (2))
+        end
+        obs.posn = obs.mulpos[:,ns]
     else
     end
+    obs.traj  = [obs.traj   obs.mulpos]
+    obs.tseri = [obs.tseri; obs.time]
 end
