@@ -1,206 +1,107 @@
-function dstbRetrain!(robo::Vector{robot}, mGP::Vector{GPBase}, NeiB::Vector{Vector{Int64}}, dataTot::Array{Vector{Float64}, 3};
-    mesh = 2, ndef = -10)
-    M    = length(robo)
-    Dim  = length(robo[1].posn)
+function Detection!(robo::robot, obs::obstacle, obsGP::Vector{GPBase})
+    robo_loca = robo.pose[1:2]
+    obs_loca  = obs.posn
+    R         = robo.R
 
-
-    x_min = robo[1].pBnd.x_min
-    y_min = robo[1].pBnd.y_min
-
-    row   = Int64(round((robo[1].pBnd.x_max - robo[1].pBnd.x_min)/mesh))
-    col   = Int64(round((robo[1].pBnd.y_max - robo[1].pBnd.y_min)/mesh))
-
-    # Hyperparameter
-    for i in 1:M # Add previous data
-        loca = Matrix{Float64}(undef, Dim, 0)
-        obsr = Vector{Float64}(undef, 0)
-        for j in NeiB[i]
-            for r in 1:row
-                for c in 1:col
-                    if  dataTot[i,r,c][1]   == ndef && dataTot[j,r,c][1] != ndef
-                        dataTot[i,r,c][1:2] =   dataTot[j,r,c][1:2]
-                        dataTot[i,r,c][3]   =   dataTot[j,r,c][3]
-                        loca = [loca  dataTot[j,r,c][1:2]]
-                        obsr = [obsr; dataTot[j,r,c][3]]
-                    end
-                end
-            end
+    if norm(robo_loca - obs_loca) < R
+        for i in 1:length(obsGP)
+            append!(obsGP[i], reshape(obs.time,1,length(obs.time)), obs.mulpos[i,:])
+            GaussianProcesses.optimize!(obsGP[i], domean = false, kern = true, noise = true)
         end
-        if !isempty(loca)
-            append!(mGP[i], loca, obsr)
-            robo[i].loca = [robo[i].loca  loca]
-            robo[i].obsr = [robo[i].obsr; obsr]
-        end
-    end
-
-    for i in 1:M # Add current data
-        loca = Matrix{Float64}(undef, Dim, 0)
-        obsr = Vector{Float64}(undef, 0)
-        for j in [NeiB[i]; i]
-            pX = Int64(round((robo[j].posn[1] - x_min)/mesh))
-            pY = Int64(round((robo[j].posn[2] - y_min)/mesh))
-            if dataTot[i,pX,pY][1] == ndef
-                dataTot[i,pX,pY][1:2] = robo[j].posn
-                dataTot[i,pX,pY][3]   = robo[j].meas
-                loca = [loca  robo[j].posn]
-                obsr = [obsr; robo[j].meas]
-            end
-        end
-        append!(mGP[i], loca, obsr)
-        robo[i].loca = [robo[i].loca  loca]
-        robo[i].obsr = [robo[i].obsr; obsr]
-    end
-    
-    method = Optim.NelderMead(; parameters = Optim.AdaptiveParameters(), initial_simplex = Optim.AffineSimplexer())
-
-    for i in 1:M
-        GaussianProcesses.optimize!(mGP[i], domean = true, kern = true, noise = true, noisebounds = [-3., -1.], 
-                                            kernbounds = [[-5.,-5.,-5.],[5.,5.,5.]]; method)
-        if mGP[i].logNoise.value > -1. && mGP[i].logNoise.value < -3.
-            mGP[i].logNoise.value = -2.
-        end
-    end
-
-    β   = zeros(M)
-    ϕℓ2 = zeros(Dim, M)
-    σκ2 = zeros(M)
-    σω2 = zeros(M)
-    for i in 1:M
-        β[i]      = mGP[i].mean.β
-        ϕℓ2[:,i]  = 1 ./mGP[i].kernel.iℓ2
-        σκ2[i]    = mGP[i].kernel.σ2
-        σω2[i]    = exp(2*mGP[i].logNoise.value)
-    end
-
-    NBe = [[NeiB[i];i] for i in 1:M]
-    # Consensus
-    for k in 1:50
-        for i in 1:M
-            robo[i].β     = 1/length(NBe[i])*sum(β[i]     for i in NBe[i])
-            robo[i].ϕℓ2   = 1/length(NBe[i])*sum(ϕℓ2[:,i] for i in NBe[i])
-            robo[i].σκ2   = 1/length(NBe[i])*sum(σκ2[i]   for i in NBe[i])
-            robo[i].σω2   = 1/length(NBe[i])*sum(σω2[i]   for i in NBe[i])
-            β[i]          = robo[i].β
-            ϕℓ2[:,i]      = robo[i].ϕℓ2
-            σκ2[i]        = robo[i].σκ2
-            σω2[i]        = robo[i].σω2
-        end
-    end
-    println([log.(ϕℓ2[:,1])/2; log(σκ2[1])/2; log(σω2[1])/2])
-
-    for i in 1:M
-        robo[i].iΦ2    =  diagm(1 ./robo[i].ϕℓ2)
-        robo[i].iCθ    =  inv(dstbSEkernel(robo[i], robo[i].loca, robo[i].loca) + robo[i].σω2*I(length(robo[i].obsr)))
     end
 end
 
 
+function trainNN(mNN::Chain, dataIn::AbstractVector, dataOut::AbstractArray; epochs = 400) #time series
 
-@everywhere function myGP_predict(mGP::GPBase, p::Matrix{Float64}, full_cov = false)
-    return predict_y(mGP, p, full_cov = full_cov)
+    X = [[Float32.(x)] for x in dataIn]
+    Y = Float32.(dataOut)
+
+    bestloss        = Inf
+    bestmodel       = mNN
+    numincreases    = 0
+    maxnumincreases = 50
+
+    θ     = Flux.params(mNN)
+    opt   = ADAM(5e-2)
+
+    for epoch in 1:epochs
+        Flux.reset!(mNN)
+        ∇ = gradient(θ) do
+            mNN(X[1]) # Warm-up the model
+            # sum(sum(Flux.Losses.mse.([mNN(x)[i] for x in X[2:end]], Y[i,2:end])) for i in 1:outdim)
+            sum(Flux.Losses.mse(mNN(x), y) for (x, y) in zip(X, Y))
+        end
+        Flux.update!(opt, θ, ∇)
+
+        loss = sum(Flux.Losses.mse(mNN(x), y) for (x, y) in zip(X, Y))
+
+        if loss < 0.99bestloss
+            bestloss  = loss
+            bestmodel = deepcopy(mNN)
+        else
+            numincreases +=1
+        end
+        numincreases > maxnumincreases ? break : nothing
+    end
+    mNN = bestmodel
 end
 
-
-@everywhere function dstbLinearize_logdet(robo::robot, z::Matrix{Float64}, mGP::GPBase)
-    numDa       = length(robo.obsr)
-    K_ZZ        = dstbSEkernel(robo, z, z)
-    K_NN        = robo.iCθ
-    K_NZ        = dstbSEkernel(robo, robo.loca, z)
-    K_ZN        = Matrix(K_NZ')    
-    iCθ         = inv(myGP_predict(mGP, z, true)[2])
-
-    Dim, H      = size(z)
-    ∇L          = zeros(Dim, H)
-
-    for r in 1:Dim
-        for h in 1:H
-            Ω1 = zeros(H, H)
-            Ω2 = zeros(H, H)
-
-            for k in 1:H
-                Ω1[h,k] = Ω1[k,h] = -K_ZZ[h,k]/robo.ϕℓ2[r]*(z[r,h] - z[r,k])
-            end
-
-            dK_ZN = zeros(H, numDa)
-
-            for k in 1:numDa
-                dK_ZN[h,k] = -K_ZN[h,k]/robo.ϕℓ2[r]*(z[r,h] - robo.loca[r,k])
-            end
-
-            Ω2 = 2*dK_ZN*K_NN*K_NZ
-            
-            ∇L[r,h] = -tr(iCθ*(Ω1 - Ω2))
+function predictLSTM(mNN::Chain, dataIn::Vector{Float64}; recal = 20) #time series
+    X = [[Float32.(x)] for x in dataIn]
+    for i in 1:recal
+        for x in X
+            mNN(x)
         end
     end
-    return ∇L
+
+    res = zeros(2,0)
+    for x in X
+        res = [res Float64.(mNN(x))]
+    end
+
+    return res
 end
 
 
-@everywhere function dstbSEkernel(robo::robot, x::Matrix{Float64}, y::Matrix{Float64})
-    row   = size(x)[2]
-    col   = size(y)[2]
+function SEkern!(mGP::GPBase, X1::Vector{Float64}, X2::Vector{Float64})
+    row   = length(X1)
+    col   = length(X2)
     K     = zeros(row, col)
+    σκ2   = mGP.kernel.σ2
+    iℓ2   = mGP.kernel.iℓ2
 
     for i in 1:row
         for j in 1:col
-            K[i,j] = robo.σκ2*exp(-0.5*dot(x[:,i] - y[:,j], robo.iΦ2, x[:,i] - y[:,j]))
+            K[i,j] = σκ2*exp(-0.5*iℓ2[1]*(X1[i] - X2[j])^2)
         end
     end
-
     return K
 end
 
+function predictGP(mNN::Chain, mGP::GPBase, dataIn::Vector{Float64}, id::Int64)
+    H = length(dataIn)
+    postMean = ones(H)
+    postVar  = zeros(H)
 
-"Take measurement"
-function measure!(posn::Vector{Float64}, mGP::GPBase)
-    return predict_y(mGP, posn[:,:])[1][1]
-end
+    t     = [x for x in mGP.x][1,:]
+    ndata = length(t)
+    Ktt   = SEkern!(mGP, t, t)
+    σω2   = exp(2*mGP.logNoise.value)
+    Cyy   = inv(Ktt + σω2*Matrix(I, ndata, ndata))
 
-function meshgrid(x, y)
-    # Function to make a meshgrid
-    X = [i for i in x, j in 1:length(y)]
-    Y = [j for i in 1:length(x), j in y]
-    X = reshape(X, 1, length(X))
-    Y = reshape(Y, 1, length(Y))
-    return [X; Y]
-end
+    Y = [y for y in mGP.y]  
 
+    for i in 1:H
+        h   = dataIn[i]
+        Kth = SEkern!(mGP, t, [h])
+        Khh = SEkern!(mGP, [h], [h])
 
-@everywhere function distTrainingGrad(robo::robot)
-    iCθ = robo.iCθ
-    σκ2 = robo.σκ2
-    iΦ2 = robo.iΦ2
-    inDim = 2
+        print(Khh)
 
-    numDa = length(robo[i].obsr)
-    ∂iϕ2  = zeros(numDa,numDa,inDim)
-    ∂σκ2  = zeros(numDa,numDa)
-    ∂σω2  = zeros(numDa,numDa)
-
-    for i in 1:numDa
-        for j in 1:numDa
-            x = robo.loca[:,i]
-            y = robo.loca[:,j]
-
-            for ℓ in 1:inDim
-                ∂iϕ2[i,j,ℓ] = -(x[ℓ]-y[ℓ])^2*σκ2*exp(-0.5*dot(x-y, iΦ2, x-y))
-            end
-
-            ∂σκ2[i,j] = exp(-0.5*dot(x-y, iΦ2, x-y))
-
-            if i == j
-                ∂σω2[i,j] = 1. 
-            end
-        end
+        postMean[i] = predictLSTM(mNN, [h])[id] + (Kth'*Cyy*(Y - predictLSTM(mNN, t)[id,:]))[1]
+        postVar[i]  = (Khh - Kth'*Cyy*Kth)[1]
     end
 
-    # See Gaussian Process in ML (5.9)
-    a  = iCθ*robo.obsr
-    A  = a*a' - iCθ
-    g1 = 1/2*tr(A*∂iϕ2[:,:,1])
-    g2 = 1/2*tr(A*∂iϕ2[:,:,2])
-    g3 = 1/2*tr(A*∂σκ2)
-    g4 = 1/2*tr(A*∂σω2)
-
-    return [g1, g2, g3, g4]
+    return postMean, postVar
 end
