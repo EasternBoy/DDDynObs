@@ -1,5 +1,5 @@
 push!(LOAD_PATH, ".")
-T = 0.1; H = 5; L = 10
+dim = 2; T = 0.1; H = 5; L = 20
 
 
 import Pkg
@@ -45,54 +45,38 @@ b     = [2.5, 2.5, 1., 1.]
 obs   = obstacle(2., [10., 0.], 3)
 robo  = robot(T, H, R, r, pBounds, init, A, b)
 
-obsGP = Vector{GPBase}(undef, 2) #MeanPoly(ones(1,10))
+obsGP    = Vector{GPBase}(undef, 2) #MeanPoly(ones(1,10))
 obsGP[1] = ElasticGPE(1, mean = MeanZero(), kernel = SEArd([1.], 1.), logNoise = -2.)
 obsGP[2] = ElasticGPE(1, mean = MeanZero(), kernel = SEArd([1.], 1.), logNoise = -2.)
-
+mNN      = Chain(LSTM(1 => 32), Dense(32 => 2, identity))
 
 
 # Run simulation
 println("Now start the simulation")
 timer        = zeros(L)
-Pred         = zeros(length(init), H)
-[Pred[:,h]   = robo.pose for h in 1:H]
+Pmean        = zeros(dim, H)
+Pvar         = zeros(dim, H)
 
 
 for k in 1:L
     println("Time instance $k")
-    global Pred
+    global Pmean
 
     run_obs!(obs, k, T, 1)
 
     # Train
-    t0 = time_ns()
-    Detection!(robo, obs, obsGP)
-    dt = (time_ns()-t0)/1e9
-    println("Training time: $dt (s)")
 
+    @time Detection!(robo, obs, obsGP, mNN)
+
+    if k >= 10
+        for i in 1:dim
+            Pmean[i,:], Pvar[i,:] = predictGP(mNN, obsGP[i], k*T .+ T*[x for x in 1:H], i)
+        end
+
+        fig = plot(obs.traj[1,:], obs.traj[2,:])
+        png(fig, "Step $k")
+    end
 end
-
-mNN  = Chain(LSTM(1 => 32), Dense(32 => 2, identity))
-trainNN(mNN, obs.tseri, obs.traj)
-m_obsX, v_obsX = predictGP(mNN, obsGP[1], [2.2, 2.3, 2.4], 1)
-m_obsY, v_obsY = predictGP(mNN, obsGP[2], [2.2, 2.3, 2.4], 2)
-print("\n", m_obsY)
-print("\n", v_obsY)
-
-
-# # Create the RNN model
-# mNN    = Chain(LSTM(1 => 32), Dense(32 => 2, identity))
-# opt    = ADAM(5e-2)
-# θ      = Flux.params(mNN)
-# epochs = 400
-# for epoch in 1:epochs
-#     Flux.reset!(mNN)
-#     ∇ = gradient(θ) do
-#         mNN(X[1]) # Warm-up the model
-#         sum(sum(Flux.Losses.mse.([mNN(x)[i] for x in X[2:end]], Y[i,2:end])) for i in 1:2)
-#     end
-#     Flux.update!(opt, θ, ∇)
-# end
 
 
 
