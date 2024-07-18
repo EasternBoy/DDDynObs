@@ -1,4 +1,4 @@
-function Detection!(robo::robot, obs::obstacle, obsGP::Vector{GPBase})
+function Detection!(robo::robot, obs::obstacle, obsGP::Vector{GPBase}, mNN::Chain)
     robo_loca = robo.pose[1:2]
     obs_loca  = obs.posn
     R         = robo.R
@@ -6,7 +6,22 @@ function Detection!(robo::robot, obs::obstacle, obsGP::Vector{GPBase})
     if norm(robo_loca - obs_loca) < R
         for i in 1:length(obsGP)
             append!(obsGP[i], reshape(obs.time,1,length(obs.time)), obs.mulpos[i,:])
-            GaussianProcesses.optimize!(obsGP[i], domean = false, kern = true, noise = true)
+            if length(obsGP[i].x) >= 6
+                method = NelderMead(;   parameters = Optim.AdaptiveParameters(),
+                                        initial_simplex = Optim.AffineSimplexer())
+                obsGP[i].logNoise.value = -2.
+                obsGP[i].kernel.σ2      =  1.
+
+                obsGP[i].kernel.iℓ2     = [10.]
+                GaussianProcesses.optimize!(obsGP[i], domean = true, kern = true, noise = true, 
+                                            noisebounds = [-3., -1.], kernbounds = [[-5.,-5.],[5.,5.]]; method)
+            end
+        end
+        
+        if length(obsGP[1].x) >= 10
+            t = [x for x in obsGP[1].x][1,:]
+            Y = transpose([[y for y in obsGP[1].y] [y for y in obsGP[2].y]])
+            trainNN(mNN, t, Y)
         end
     end
 end
@@ -23,24 +38,22 @@ function trainNN(mNN::Chain, dataIn::AbstractVector, dataOut::AbstractArray; epo
     maxnumincreases = 50
 
     θ     = Flux.params(mNN)
-    opt   = ADAM(5e-2)
+    opt   = ADAM(1e-2)
 
     for epoch in 1:epochs
         Flux.reset!(mNN)
         ∇ = gradient(θ) do
             mNN(X[1]) # Warm-up the model
-            # sum(sum(Flux.Losses.mse.([mNN(x)[i] for x in X[2:end]], Y[i,2:end])) for i in 1:outdim)
-            sum(Flux.Losses.mse(mNN(x), y) for (x, y) in zip(X, Y))
+            sum(sum(Flux.Losses.mse.([mNN(x)[i] for x in X[1:end]], Y[i,1:end])) for i in 1:2)
         end
         Flux.update!(opt, θ, ∇)
 
-        loss = sum(Flux.Losses.mse(mNN(x), y) for (x, y) in zip(X, Y))
+        loss = sum(sum(Flux.Losses.mse.([mNN(x)[i] for x in X[1:end]], Y[i,1:end])) for i in 1:2)
 
-        if loss < 0.99bestloss
+        if loss < 0.95bestloss
             bestloss  = loss
             bestmodel = deepcopy(mNN)
-        else
-            numincreases +=1
+        else numincreases +=1
         end
         numincreases > maxnumincreases ? break : nothing
     end
@@ -96,8 +109,6 @@ function predictGP(mNN::Chain, mGP::GPBase, dataIn::Vector{Float64}, id::Int64)
         h   = dataIn[i]
         Kth = SEkern!(mGP, t, [h])
         Khh = SEkern!(mGP, [h], [h])
-
-        print(Khh)
 
         postMean[i] = predictLSTM(mNN, [h])[id] + (Kth'*Cyy*(Y - predictLSTM(mNN, t)[id,:]))[1]
         postVar[i]  = (Khh - Kth'*Cyy*Kth)[1]
