@@ -1,4 +1,3 @@
-
 mutable struct polyBound
     str_ang::Float64 # constant of bound constraint
     v_min::Float64 
@@ -10,12 +9,6 @@ mutable struct polyBound
         return new(str_ang, v_min, v_max, a_min, a_max)
     end
 end
-
-# mutable struct obstacle
-#     A::Matrix{Float64}
-#     b::Float64
-# end
-
 
 function robot_ode!(dx, u, x, t)
     ℓ = 1.8
@@ -83,9 +76,9 @@ mutable struct obstacle
         for i in 1:ns
             obj.mulpos[:,i] = posn
         end
-        # obj.traj   = Matrix{Float64}(undef, length(posn), 0)
-        obj.traj   = obj.mulpos
-        obj.tseri  = obj.time
+
+        obj.traj  = zeros(length(posn), 0)
+        obj.tseri = zeros(0)
         return obj
     end
 end
@@ -103,30 +96,30 @@ function run!(robo::robot, in::Vector{Float64})
 end
 
 
-function run_obs!(obs::obstacle, s::Int64, st::Float64, sce::Int64)
+function run_obs!(obs::obstacle, stp::Int64, spl::Float64, scenario::Int64)
     ns = obs.ns
-    τ = st/ns
+    τ = spl/ns
 
     rng = Random.MersenneTwister(1234)
     for i in 1:ns
-        obs.time[i] = s*st + i*τ
+        obs.time[i] = stp*spl + i*τ
     end
 
-    if sce == 1 # Straight impact
-        vx = -3.
-        vy = 2sin(2(s*st + τ))
-        obs.mulpos[:,1] = obs.posn + τ*[vx, vy] + τ*randn(rng, Float64, (2))
+    if scenario == 1 # Straight impact
+        vx = -4.
+        vy =  4sin(10(stp*spl + τ))
+        obs.mulpos[:,1] = obs.posn + τ*[vx, vy] + τ*randn(rng, Float64, (2))/5
         for i in 1:ns-1
-            obs.mulpos[:,i+1] = obs.mulpos[:,i] + τ*[vx, vy] + τ*randn(rng, Float64, (2))
+            obs.mulpos[:,i+1] = obs.mulpos[:,i] + τ*[vx, 4sin(10(stp*spl + i*τ))] + τ*randn(rng, Float64, (2))/5
         end
         obs.posn = obs.mulpos[:,ns]
 
-    elseif sce == 2 # Circle vehicle
-        vx = 2cos(5(s*st + τ))
-        vy = 2sin(5(s*st + τ))
+    elseif scenario == 2 # Circle vehicle
+        vx = 2cos(5(stp*spl + τ))
+        vy = 2sin(5(stp*spl + τ))
         obs.mulpos[:,1] = obs.posn + τ*[vx, vy] + τ*randn(rng, Float64, (2))
         for i in 1:ns-1
-            obs.mulpos[:,i+1] = obs.mulpos[:,i] + τ*[2cos(5(s*st + i*τ)), 2sin(5(s*st + i*τ))] + τ*randn(rng, Float64, (2))
+            obs.mulpos[:,i+1] = obs.mulpos[:,i] + τ*[2cos(5(stp*spl + i*τ)), 2sin(5(stp*spl + i*τ))] + τ*randn(rng, Float64, (2))
         end
         obs.posn = obs.mulpos[:,ns]
     else
