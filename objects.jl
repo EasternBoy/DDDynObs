@@ -10,11 +10,11 @@ mutable struct polyBound
     end
 end
 
-function robot_ode!(dx, u, x, t)
-    ℓ = 1.8
+function robot_ode!(dx, x, u, t)
+    ℓ = 1.9
     dx[1] = x[4]*cos(x[3])
     dx[2] = x[4]*sin(x[3])
-    dx[3] = x[4]*tan(u[1])/ℓ
+    dx[3] = x[4]*u[1]/ℓ
     dx[4] = u[2]
 end
 
@@ -22,7 +22,7 @@ mutable struct robot
     T::Float64             # Sampling time
     H::Integer             # Horizon length
     R::Float64             # Detection range
-    r::Float64             # Obstacle radius
+    ℓ::Float64             # distance between two wheels
     pBnd::polyBound        # Physical limit
     pose::Vector{Float64}  # Current states: x, y, θ, v
     A::Matrix{Float64}     # Shape
@@ -32,28 +32,19 @@ mutable struct robot
 
     traj::Matrix{Float64}  # All state up to current time
     inarr::Matrix{Float64}
-
-
-
+    
     # ODEProblem for solving the ODE
-    opti
-    ODEprob
-
-    function robot(T::Float64, H::Integer, R::Float64, r::Float64, pBnd::polyBound, x0::AbstractVector, 
+    function robot(T::Float64, H::Integer, R::Float64, ℓ::Float64, pBnd::polyBound, x0::AbstractVector, 
                     A::Matrix{Float64}, b::Vector{Float64})
 
-        obj         = new(T, H, R, r, pBnd, x0, A, b)
+        obj         = new(T, H, R, ℓ, pBnd, x0, A, b)
         obj.input   = [0., 0.]
 
-        obj.traj   = Matrix{Float64}(undef, length(x0), 0)
-        obj.traj   = [obj.traj x0]
-        obj.inarr  = Matrix{Float64}(undef, length(obj.input), 0)
-        obj.inarr  = [obj.inarr obj.input]
+        obj.traj    = Matrix{Float64}(undef, length(x0), 0)
+        obj.traj    = [obj.traj x0]
+        obj.inarr   = Matrix{Float64}(undef, length(obj.input), 0)
+        obj.inarr   = [obj.inarr obj.input]
 
-        obj.opti = JuMP.Model(Ipopt.Optimizer)
-        obj.ODEprob  = OrdinaryDiffEq.ODEProblem(robot_ode!, obj.pose, (0.0, T), obj.input)
-
-        set_silent(obj.opti)
         return obj
     end
 end
@@ -77,8 +68,8 @@ mutable struct obstacle
             obj.mulpos[:,i] = posn
         end
 
-        obj.traj  = zeros(length(posn), 0)
-        obj.tseri = zeros(0)
+        obj.traj  = [posn;;]
+        obj.tseri = [0.]
         return obj
     end
 end
@@ -87,7 +78,8 @@ end
 function run!(robo::robot, in::Vector{Float64})
     # Copy the values from u to a.u
     robo.input = in
-    sol = OrdinaryDiffEq.solve(robo.ODEprob, Tsit5(), reltol = 1e-5, abstol = 1e-5)
+    prob  = OrdinaryDiffEq.ODEProblem(robot_ode!, robo.pose, robo.input, (0.0, robo.T))
+    sol   = OrdinaryDiffEq.solve(prob, Tsit5())
 
     # Update state with the solution, and return it
     robo.pose  = sol[end]
@@ -96,30 +88,32 @@ function run!(robo::robot, in::Vector{Float64})
 end
 
 
-function run_obs!(obs::obstacle, stp::Int64, spl::Float64, scenario::Int64)
-    ns = obs.ns
-    τ = spl/ns
+function run_obs!(obs::obstacle, k::Int64, τ::Float64, scenario::Int64)
+    ns  = obs.ns
+    Δτ  = τ/ns 
+    
 
     rng = Random.MersenneTwister(1234)
     for i in 1:ns
-        obs.time[i] = stp*spl + i*τ
+        obs.time[i] = k*τ + i*Δτ
     end
 
     if scenario == 1 # Straight impact
-        vx = -4.
-        vy =  4sin(10(stp*spl + τ))
-        obs.mulpos[:,1] = obs.posn + τ*[vx, vy] + τ*randn(rng, Float64, (2))/5
+        ω  = 5
+        A  = 20
+        υ  = -5
+        obs.mulpos[:,1] = obs.posn + Δτ*[υ, A*sin(ω*(k*τ))] + Δτ*randn(rng, Float64, (2))/5
         for i in 1:ns-1
-            obs.mulpos[:,i+1] = obs.mulpos[:,i] + τ*[vx, 4sin(10(stp*spl + i*τ))] + τ*randn(rng, Float64, (2))/5
+            obs.mulpos[:,i+1] = obs.mulpos[:,i] + Δτ*[υ, A*sin(ω*(k*τ + i*Δτ))] + Δτ*randn(rng, Float64, (2))/5
         end
         obs.posn = obs.mulpos[:,ns]
 
     elseif scenario == 2 # Circle vehicle
-        vx = 2cos(5(stp*spl + τ))
-        vy = 2sin(5(stp*spl + τ))
-        obs.mulpos[:,1] = obs.posn + τ*[vx, vy] + τ*randn(rng, Float64, (2))
+        vx = 2cos(5(k*τ + Δτ))
+        vy = 2sin(5(k*τ + Δτ))
+        obs.mulpos[:,1] = obs.posn + Δτ*[vx, vy] + Δτ*randn(rng, Float64, (2))
         for i in 1:ns-1
-            obs.mulpos[:,i+1] = obs.mulpos[:,i] + τ*[2cos(5(stp*spl + i*τ)), 2sin(5(stp*spl + i*τ))] + τ*randn(rng, Float64, (2))
+            obs.mulpos[:,i+1] = obs.mulpos[:,i] + Δτ*[2cos(5(k*τ + i*Δτ)), 2sin(5(k*τ + i*Δτ))] + Δτ*randn(rng, Float64, (2))
         end
         obs.posn = obs.mulpos[:,ns]
     else
