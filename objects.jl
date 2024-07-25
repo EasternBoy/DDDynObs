@@ -21,6 +21,7 @@ end
 mutable struct robot
     T::Float64             # Sampling time
     H::Integer             # Horizon length
+    H₊::Integer             # Horizon length
     R::Float64             # Detection range
     ℓ::Float64             # distance between two wheels
     pBnd::polyBound        # Physical limit
@@ -34,10 +35,10 @@ mutable struct robot
     inarr::Matrix{Float64}
     
     # ODEProblem for solving the ODE
-    function robot(T::Float64, H::Integer, R::Float64, ℓ::Float64, pBnd::polyBound, x0::AbstractVector, 
+    function robot(T::Float64, H::Integer, H₊::Integer, R::Float64, ℓ::Float64, pBnd::polyBound, x0::AbstractVector, 
                     A::Matrix{Float64}, b::Vector{Float64})
 
-        obj         = new(T, H, R, ℓ, pBnd, x0, A, b)
+        obj         = new(T, H, H₊, R, ℓ, pBnd, x0, A, b)
         obj.input   = [0., 0.]
 
         obj.traj    = Matrix{Float64}(undef, length(x0), 0)
@@ -78,7 +79,7 @@ end
 function run!(robo::robot, in::Vector{Float64})
     # Copy the values from u to a.u
     robo.input = in
-    prob  = OrdinaryDiffEq.ODEProblem(robot_ode!, robo.pose, robo.input, (0.0, robo.T))
+    prob  = OrdinaryDiffEq.ODEProblem(robot_ode!, robo.pose, (0.0, robo.T), robo.input)
     sol   = OrdinaryDiffEq.solve(prob, Tsit5())
 
     # Update state with the solution, and return it
