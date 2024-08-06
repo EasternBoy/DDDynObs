@@ -10,10 +10,11 @@ function plot_robot(robo::robot, x::Vector{Float64}, y::Vector{Float64})
     rec = Shape([p[1]+RU[1], p[1]+RD[1], p[1]+LD[1], p[1]+LU[1]],
                 [p[2]+RU[2], p[2]+RD[2], p[2]+LD[2], p[2]+LU[2]])
 
-    fig = plot(Array(0:45), 2ones(46), size=(700,600), color=:black, linestyle=:dash)
+    fig = plot(Array(0:45), ones(46), size=(700,600), color=:black, linestyle=:dash, label="")
     plot!(rec, label="", fillcolor = plot_color(:red, 0.3), fontsize = 30)
     xlims!((-3.,45.)); ylims!((-17.,25.))
-    plot!([p[1]; x], [p[2];y], label="", linewidth = 2, linecolor = :red, xtickfontsize=16,ytickfontsize=16)
+    plot!([p[1]; x], [p[2];y], label="", linewidth = 2, linecolor = :green, xtickfontsize=16,ytickfontsize=16)
+    plot!(robo.traj[1,:], robo.traj[2,:], label="", linewidth = 2, linecolor = :red)
     return fig
 end
 
