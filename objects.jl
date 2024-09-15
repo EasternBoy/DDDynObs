@@ -21,13 +21,15 @@ end
 mutable struct robot
     T::Float64             # Sampling time
     H::Integer             # Horizon length
-    H₊::Integer             # Horizon length
+    H₊::Integer            # Horizon length
     R::Float64             # Detection range
     ℓ::Float64             # distance between two wheels
     pBnd::polyBound        # Physical limit
     pose::Vector{Float64}  # Current states: x, y, θ, v
     A::Matrix{Float64}     # Shape
     b::Vector{Float64}
+
+    predPose::Matrix{Float64}
 
     input::Vector{Float64} # measurement
 
@@ -46,6 +48,8 @@ mutable struct robot
         obj.inarr   = Matrix{Float64}(undef, length(obj.input), 0)
         obj.inarr   = [obj.inarr obj.input]
 
+        obj.predPose = repeat(x0, 1, H₊)
+
         return obj
     end
 end
@@ -54,7 +58,7 @@ mutable struct obstacle
     r::Float64 #radius
     posn::Vector{Float64}
     ns::Int64
-    mulpos::Matrix{Float64}
+    δpos::Matrix{Float64}
     time::Vector{Float64}
 
     traj::Matrix{Float64}
@@ -63,11 +67,8 @@ mutable struct obstacle
     function obstacle(r::Float64, posn::Vector{Float64}, ns::Int64)
 
         obj        = new(r, posn, ns)
-        obj.mulpos = zeros(length(posn), ns)
+        obj.δpos   = zeros(length(posn), ns)
         obj.time   = zeros(ns)
-        for i in 1:ns
-            obj.mulpos[:,i] = posn
-        end
 
         obj.traj  = [posn;;]
         obj.tseri = [0.]
@@ -91,34 +92,28 @@ end
 
 function run_obs!(obs::obstacle, k::Int64, τ::Float64, scenario::Int64)
     ns  = obs.ns
-    Δτ  = τ/ns 
+    Δτ  = τ/ns
     
 
-    rng = Random.MersenneTwister(1234)
-    for i in 1:ns
-        obs.time[i] = k*τ + i*Δτ
-    end
-
-    if scenario == 1 # Straight impact
-        ω  = 5
-        A  = 20
-        υ  = -5
-        obs.mulpos[:,1] = obs.posn + Δτ*[υ, A*sin(ω*(k*τ))] + Δτ*randn(rng, Float64, (2))/5
-        for i in 1:ns-1
-            obs.mulpos[:,i+1] = obs.mulpos[:,i] + Δτ*[υ, A*sin(ω*(k*τ + i*Δτ))] + Δτ*randn(rng, Float64, (2))/5
-        end
-        obs.posn = obs.mulpos[:,ns]
-
-    elseif scenario == 2 # Circle vehicle
-        vx = 2cos(5(k*τ + Δτ))
-        vy = 2sin(5(k*τ + Δτ))
-        obs.mulpos[:,1] = obs.posn + Δτ*[vx, vy] + Δτ*randn(rng, Float64, (2))
-        for i in 1:ns-1
-            obs.mulpos[:,i+1] = obs.mulpos[:,i] + Δτ*[2cos(5(k*τ + i*Δτ)), 2sin(5(k*τ + i*Δτ))] + Δτ*randn(rng, Float64, (2))
-        end
-        obs.posn = obs.mulpos[:,ns]
-    else
-    end
-    obs.traj  = [obs.traj   obs.mulpos]
+    rng       = Random.MersenneTwister(1234)
+    obs.time  = [k*τ + i*Δτ for i in 1:ns]
     obs.tseri = [obs.tseri; obs.time]
+
+    if scenario == 1 #Sinusoid move
+        for i in 1:ns
+            obs.δpos[:,i] = Δτ*[-5., 5sin(π*(k*τ+i*Δτ))] + Δτ*randn(rng, Float64, (2))/ns
+            obs.traj      = [obs.traj   obs.posn+sum(obs.δpos[:,k] for k in 1:i)]
+        end
+    elseif  scenario == 2 #Circle move
+        for i in 1:ns
+            obs.δpos[:,i] = Δτ*[5cos(π/4*(k*τ+i*Δτ)), 5sin(π/4*(k*τ+i*Δτ))] + Δτ*randn(rng, Float64, (2))/ns
+            obs.traj      = [obs.traj   obs.posn+sum(obs.δpos[:,k] for k in 1:i)]
+        end
+    else #Straight move
+        for i in 1:ns
+            obs.δpos[:,i] = Δτ*[0., 6.] + Δτ*randn(rng, Float64, (2))/ns
+            obs.traj      = [obs.traj   obs.posn+sum(obs.δpos[:,k] for k in 1:i)]
+        end
+    end
+    obs.posn = obs.traj[:,end]
 end
