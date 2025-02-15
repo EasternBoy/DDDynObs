@@ -1,5 +1,5 @@
 # DDDynObs
-ICRA2025
+Submitted to IROS2025
 
 Setup packages
 
