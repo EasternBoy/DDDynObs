@@ -1,4 +1,4 @@
-function Detection!(robo::robot, obs::obstacle, obsGP::Vector{GPBase}, mNN::Chain; minData = 9, maxData = 80)
+function Detection!(robo::robot, obs::obstacle, obsGP::Vector{GPBase}, mNN::Chain; minData = 9, maxData = 60)
     robo_loca = robo.pose[1:2]
     obs_loca  = obs.posn
     R         = robo.R
@@ -23,7 +23,7 @@ function Detection!(robo::robot, obs::obstacle, obsGP::Vector{GPBase}, mNN::Chai
             bestmodel = obsGP[i]
             bestmll   = -Inf
             if length(obsGP[i].x) >= minData
-                for il2 in [0.01, 10.]
+                for il2 in [1.]
                     obsGP[i].kernel.iℓ2[1]  =  il2
                     obsGP[i].logNoise.value = -2.
                     obsGP[i].kernel.σ2      =  1.
@@ -58,21 +58,19 @@ function trainNN(mNN::Chain, dataIn::AbstractVector, dataOut::AbstractArray; epo
     numincreases    = 0
     maxnumincreases = 50
 
-    θ     = Flux.params(mNN)
-    opt   = ADAM(1e-2)
+    data = [(X[i], Y[:, i]) for i in 1:length(X)]
+
+    loss(mNN, x, y) = norm(mNN(x) .- y)
+
+    opt_state = Flux.setup(ADAM(1e-2), mNN)
 
     for epoch in 1:epochs
-        Flux.reset!(mNN)
-        ∇ = gradient(θ) do
-            mNN(X[1]) # Warm-up the model
-            sum(sum(Flux.Losses.mse.([mNN(x)[i] for x in X], Y[i,:])) for i in 1:dim)
-        end
-        Flux.update!(opt, θ, ∇)
+        Flux.train!(loss, mNN, data, opt_state)
 
-        loss = sum(sum(Flux.Losses.mse.([mNN(x)[i] for x in X], Y[i,:])) for i in 1:dim)
+        lss = sum(loss(mNN, X[i], Y[:,i]) for i in 1:length(X))
 
-        if loss < 0.95bestloss
-            bestloss  = loss
+        if lss < 0.95bestloss
+            bestloss  = lss
             bestmodel = deepcopy(mNN)
         else numincreases +=1
         end
