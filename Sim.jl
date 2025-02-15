@@ -1,9 +1,9 @@
 push!(LOAD_PATH, ".")
 dim = 2 
 T   = 0.1
-H   = 8
-H₊  = 12
-L   = 50
+H   = 6
+H₊  = 8
+L   = 60
 ns  = 3
 
 
@@ -60,7 +60,7 @@ robo  = robot(T, H, H₊, R, ℓ, pBounds, init, A, b)
 obsGP    = Vector{GPBase}(undef, 2) #MeanPoly(ones(1,10))
 obsGP[1] = GPE(mean = MeanConst(1.), kernel = SEArd([1.], 1.), logNoise = -2.)
 obsGP[2] = GPE(mean = MeanConst(1.), kernel = SEArd([1.], 1.), logNoise = -2.)
-mNN      = Chain(RNN(1 => 16), Dense(16 => 2))
+mNN      = Chain(RNN(1 => 16, tanh), Dense(16 => 2, tanh))
 
 
 # Run simulation
