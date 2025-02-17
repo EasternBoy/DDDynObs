@@ -1,6 +1,6 @@
 ![Scheme](scheme.png)
 
-
+![alt text](https://github.com/EasternBoy/DDDynObs/blob/main/Scheme.png)
 
 # DDDynObs
   Julia 1.10.8
