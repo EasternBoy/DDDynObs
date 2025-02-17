@@ -1,7 +1,7 @@
 ![alt text](https://github.com/EasternBoy/DDDynObs/blob/main/Scheme.png)
 Diagram of LEAP-O
 
-# DDDynObs
+# Package setup
   Julia 1.10.8
   
   [31c24e10] Distributions v0.25.117
