@@ -47,18 +47,13 @@ function Detection!(robo::robot, obs::obstacle, obsGP::Vector{GPBase}, mNN::Chai
 end
 
 
-function trainNN(mNN::Chain, dataIn::AbstractVector, dataOut::AbstractArray; epochs = 400) #time series
+function trainNN(mNN::Chain, dataIn::AbstractVector, dataOut::AbstractArray; epochs = 50) #time series
 
     X   = [[Float32.(x)] for x in dataIn]
     Y   = Float32.(dataOut)
-    dim = minimum(size(dataOut))
+    nd  = length(X)
 
-    bestloss        = Inf
-    bestmodel       = mNN
-    numincreases    = 0
-    maxnumincreases = 50
-
-    data = [(X[i], Y[:, i]) for i in 1:length(X)]
+    data = [(reshape(X[i], 1, 1), Y[:, i]) for i in 1:nd]
 
     loss(mNN, x, y) = norm(mNN(x) .- y)
 
@@ -66,30 +61,14 @@ function trainNN(mNN::Chain, dataIn::AbstractVector, dataOut::AbstractArray; epo
 
     for epoch in 1:epochs
         Flux.train!(loss, mNN, data, opt_state)
-
-        lss = sum(loss(mNN, X[i], Y[:,i]) for i in 1:length(X))
-
-        if lss < 0.95bestloss
-            bestloss  = lss
-            bestmodel = deepcopy(mNN)
-        else numincreases +=1
-        end
-        numincreases > maxnumincreases ? break : nothing
     end
-    mNN = bestmodel
 end
 
 function predictLSTM(mNN::Chain, dataIn::Vector{Float64}; recal = 20) #time series
     X = [[Float32.(x)] for x in dataIn]
-    for i in 1:recal
-        for x in X
-            mNN(x)
-        end
-    end
-
     res = zeros(2,0)
     for x in X
-        res = [res Float64.(mNN(x))]
+        res = [res Float64.(mNN(reshape(x,1,1)))]
     end
 
     return res
