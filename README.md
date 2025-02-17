@@ -1,3 +1,7 @@
+[View Figure (PDF)](https://github.com/EasternBoy/DDDynObs/blob/main/Scheme.pdf)
+
+
+
 # DDDynObs
   Julia 1.10.8
   
