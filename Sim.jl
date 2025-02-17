@@ -12,9 +12,7 @@ using Pkg
 Pkg.activate(@__DIR__)
 # Pkg.instantiate()
 
-using Optim, Random, CSV, DataFrames, MAT,  Distributions
-using Plots, Dates, Statistics, Colors, ColorSchemes
-using Ipopt, JuMP, GaussianProcesses, LinearAlgebra, OrdinaryDiffEq, Flux
+using Optim, Plots, JuMP, GaussianProcesses, LinearAlgebra, OrdinaryDiffEq, Flux, Random, Ipopt, Distributions
 
 
 
