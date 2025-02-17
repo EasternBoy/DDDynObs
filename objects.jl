@@ -91,8 +91,8 @@ end
 
 
 function run_obs!(obs::obstacle, k::Int64, τ::Float64, scenario::Int64)
-    ns  = obs.ns
-    Δτ  = τ/ns
+    ns  = obs.ns #Number of data obtained between two consecutive time instances
+    Δτ  = τ/ns   #uniform sampling
     
 
     rng       = Random.MersenneTwister(1234)

@@ -59,13 +59,13 @@ robo  = robot(T, H, H₊, R, ℓ, pBounds, init, A, b)
 obsGP    = Vector{GPBase}(undef, 2) #MeanPoly(ones(1,10))
 obsGP[1] = GPE(mean = MeanConst(1.), kernel = SEArd([1.], 1.), logNoise = -2.)
 obsGP[2] = GPE(mean = MeanConst(1.), kernel = SEArd([1.], 1.), logNoise = -2.)
-mNN      = Chain(RNN(1 => 16), Dense(16 => 2))
+mNN      = Chain(RNN(1 => 8), Dense(8 => 2))
 
 
 # Run simulation
 println("Now start the simulation")
 for k in 1:L
-    println("Time instance $k")
+    println("Step $k:")
 
     run_obs!(obs, k-1, T, TypeOfObs)
 
