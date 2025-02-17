@@ -5,13 +5,9 @@ Julia 1.10.8
 Setup package
 
 Adapt v4.1.1
-
 CSV v0.10.15
-
 ColorSchemes v3.29.0
-
 Colors v0.13.0
-
 DataFrames v1.7.0
 
 Distributions v0.25.117
