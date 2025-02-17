@@ -1,4 +1,4 @@
-[View Figure (PDF)](https://github.com/EasternBoy/DDDynObs/blob/main/Scheme.pdf)
+![Scheme](scheme.png)
 
 
 
