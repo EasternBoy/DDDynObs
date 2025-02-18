@@ -21,7 +21,6 @@ end
 mutable struct robot
     T::Float64             # Sampling time
     H::Integer             # Horizon length
-    H₊::Integer            # Horizon length
     R::Float64             # Detection range
     ℓ::Float64             # distance between two wheels
     pBnd::polyBound        # Physical limit
@@ -37,10 +36,10 @@ mutable struct robot
     inarr::Matrix{Float64}
     
     # ODEProblem for solving the ODE
-    function robot(T::Float64, H::Integer, H₊::Integer, R::Float64, ℓ::Float64, pBnd::polyBound, x0::AbstractVector, 
+    function robot(T::Float64, H::Integer, R::Float64, ℓ::Float64, pBnd::polyBound, x0::AbstractVector, 
                     A::Matrix{Float64}, b::Vector{Float64})
 
-        obj         = new(T, H, H₊, R, ℓ, pBnd, x0, A, b)
+        obj         = new(T, H, R, ℓ, pBnd, x0, A, b)
         obj.input   = [0., 0.]
 
         obj.traj    = Matrix{Float64}(undef, length(x0), 0)
@@ -48,7 +47,7 @@ mutable struct robot
         obj.inarr   = Matrix{Float64}(undef, length(obj.input), 0)
         obj.inarr   = [obj.inarr obj.input]
 
-        obj.predPose = repeat(x0, 1, H₊)
+        obj.predPose = repeat(x0, 1, H)
 
         return obj
     end
@@ -63,6 +62,7 @@ mutable struct obstacle
 
     traj::Matrix{Float64}
     tseri::Vector{Float64}
+    data::Vector{Tuple}
 
     function obstacle(r::Float64, posn::Vector{Float64}, ns::Int64)
 
@@ -72,6 +72,7 @@ mutable struct obstacle
 
         obj.traj  = [posn;;]
         obj.tseri = [0.]
+        obj.data  = Tuple[]
         return obj
     end
 end
@@ -95,25 +96,34 @@ function run_obs!(obs::obstacle, k::Int64, τ::Float64, scenario::Int64)
     Δτ  = τ/ns   #uniform sampling
     
 
-    rng       = Random.MersenneTwister(1234)
-    obs.time  = [k*τ + i*Δτ for i in 1:ns]
+    obs.time  = [k*τ + i*Δτ for i in 1:ns] 
     obs.tseri = [obs.tseri; obs.time]
 
     if scenario == 1 #Sinusoid move
         for i in 1:ns
-            obs.δpos[:,i] = Δτ*[-5., 5sin(π*(k*τ+i*Δτ))] + Δτ*randn(rng, Float64, (2))/ns
+            obs.δpos[:,i] = Δτ*[-4., 4sin(π*(k*τ+i*Δτ))] + Δτ*rand(Uniform(-0.1, 0.1),2)
             obs.traj      = [obs.traj   obs.posn+sum(obs.δpos[:,k] for k in 1:i)]
         end
     elseif  scenario == 2 #Circle move
         for i in 1:ns
-            obs.δpos[:,i] = Δτ*[5cos(π/4*(k*τ+i*Δτ)), 5sin(π/4*(k*τ+i*Δτ))] + Δτ*randn(rng, Float64, (2))/ns
+            obs.δpos[:,i] = Δτ*[5cos(π/4*(k*τ+i*Δτ)), 5sin(π/4*(k*τ+i*Δτ))] + Δτ*rand(Uniform(-0.1, 0.1),2)
             obs.traj      = [obs.traj   obs.posn+sum(obs.δpos[:,k] for k in 1:i)]
         end
     else #Straight move
         for i in 1:ns
-            obs.δpos[:,i] = Δτ*[0., 6.] + Δτ*randn(rng, Float64, (2))/ns
+            obs.δpos[:,i] = Δτ*[0, -3.] + Δτ*rand(Uniform(-0.1, 0.1),2)
             obs.traj      = [obs.traj   obs.posn+sum(obs.δpos[:,k] for k in 1:i)]
         end
     end
     obs.posn = obs.traj[:,end]
+
+    max_len = 100
+
+    for i in 1:length(obs.time)
+        if size(obs.data)[1] < max_len
+            obs.data = [obs.data; (reshape([Float32.(obs.time[i])],1,1), Float32.(obs.δpos[:,i]))]
+        else
+            obs.data = [obs.data[end+1-max_len:end]; (reshape([Float32.(obs.time[i])],1,1), Float32.(obs.δpos[:,i]))]
+        end
+    end
 end

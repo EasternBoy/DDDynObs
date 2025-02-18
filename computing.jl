@@ -1,7 +1,7 @@
 function Detection!(robo::robot, obs::obstacle, obsGP::Vector{GPBase}, mNN::Chain; minData = 9, maxData = 30)
     robo_loca = robo.pose[1:2]
     obs_loca  = obs.posn
-    R         = robo.R
+    R  = robo.R
 
     if norm(robo_loca - obs_loca) < R
         for i in 1:length(obsGP)
@@ -21,15 +21,12 @@ function Detection!(robo::robot, obs::obstacle, obsGP::Vector{GPBase}, mNN::Chai
         
         for i in 1:length(obsGP)
             obsGP[i].logNoise.value = -2. #Initial
-            obsGP[i].kernel.σ2      =  0.1 #Initial
+            obsGP[i].kernel.σ2      =  1. #Initial
             if length(obsGP[i].x) >= minData
-                GaussianProcesses.optimize!(obsGP[i], domean = false, kern = true, noise = true, noisebounds = [-3., -1.], 
-                                            kernbounds = [[-5.,-5.],[5.,5.]], method = Optim.NelderMead())
-
-                t = [x for x in obsGP[1].x][1,:]
-                Y = transpose([[y for y in obsGP[1].y] [y for y in obsGP[2].y]])
-                trainNN(mNN, t, Y)
-            else
+                GaussianProcesses.optimize!(obsGP[i], domean = false, kern = true, noise = true, 
+                                            noisebounds = [-3., -1.], kernbounds = [[-5.,-5.],[5.,5.]], method = Optim.NelderMead())
+                trainNN(mNN, obs.data)
+            else length(obsGP[i].x) < minData
                 GaussianProcesses.optimize!(obsGP[i], domean = true, kern = true, noise = true, 
                                             noisebounds = [-3., -1.], kernbounds = [[-5.,-5.],[5.,5.]], method = Optim.NelderMead())
             end
@@ -37,30 +34,23 @@ function Detection!(robo::robot, obs::obstacle, obsGP::Vector{GPBase}, mNN::Chai
     end
 end
 
-
-function trainNN(mNN::Chain, dataIn::AbstractVector, dataOut::AbstractArray; epochs = 400) #time series
-
-    X   = [[Float32.(x)] for x in dataIn]
-    Y   = Float32.(dataOut)
-    nd  = length(X)
-
-    data = [(reshape(X[i], 1, 1), Y[:, i]) for i in 1:nd]
+function trainNN(mNN::Chain, data::Vector{Tuple}; epochs = 400)
 
     loss(mNN, x, y) = norm(mNN(x) .- y)
 
-    opt_state = Flux.setup(ADAM(0.1), mNN)
+    opt_state = Flux.setup(ADAM(1e-2), mNN)
 
     bestloss        = Inf
     bestmodel       = mNN
     numincreases    = 0
-    maxnumincreases = 20
+    maxnumincreases = 10
 
     for epoch in 1:epochs
         Flux.train!(loss, mNN, data, opt_state)
 
-        lss = sum(loss(mNN, X, Y) for (X,Y) in data)
+        lss = sum(loss(mNN, x, y) for (x,y) in data)
 
-        if lss < 0.95bestloss
+        if lss < 0.98bestloss
             bestloss  = lss
             bestmodel = deepcopy(mNN)
         else numincreases +=1
@@ -74,6 +64,7 @@ end
 function predictLSTM(mNN::Chain, dataIn::Vector{Float64}) #time series
     X = [[Float32.(x)] for x in dataIn]
     res = zeros(2,0)
+
     for x in X
         res = [res Float64.(mNN(reshape(x,1,1)))]
     end
@@ -92,7 +83,7 @@ function predictGP(mNN::Chain, mGP::GPBase, dataIn::Vector{Float64}, id::Int64; 
     ndata = length(mGP.x)
     Cyy   = inv(Ktt + σω2*Matrix(I, ndata, ndata))
 
-    Y = [y for y in mGP.y]  
+    Y = [y for y in mGP.y]
 
     for i in 1:H
         if length(mGP.x) >= minData
@@ -110,4 +101,8 @@ function predictGP(mNN::Chain, mGP::GPBase, dataIn::Vector{Float64}, id::Int64; 
     end
 
     return postMean, postVar
+end
+
+function normalize(v::AbstractArray)
+    return (v .- minimum(v))./(maximum(v) - minimum(v))
 end

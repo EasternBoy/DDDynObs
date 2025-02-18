@@ -1,8 +1,7 @@
 push!(LOAD_PATH, ".")
 dim = 2 
 T   = 0.1
-H   = 8
-H₊  = 10
+H   = 10
 L   = 60
 ns  = 3
 
@@ -30,8 +29,8 @@ R = 20.
 str_ang =  0.6
 v_min   = -10.
 v_max   =  20.
-a_min   = -2.
-a_max   =  2.
+a_min   = -5.
+a_max   =  5.
 pBounds = polyBound(str_ang, v_min, v_max, a_min, a_max)
 
 
@@ -47,14 +46,14 @@ mse_pre  = zeros(length(test_points))
 
 
 if TypeOfObs == 1 #Sinusoid move
-    obs   = obstacle(2., [22., 0.], ns)
+    obs   = obstacle(2., [25., 0.], ns)
 elseif TypeOfObs == 2 #Circle move
     obs   = obstacle(2., [18., -10.], ns)
 else #Straight move
     obs   = obstacle(2., [15., -15.], ns)
 end
 
-robo  = robot(T, H, H₊, R, ℓ, pBounds, init, A, b)
+robo  = robot(T, H, R, ℓ, pBounds, init, A, b)
 
 obsGP    = Vector{GPBase}(undef, 2) #MeanPoly(ones(1,10))
 obsGP[1] = GPE(mean = MeanConst(1.), kernel = SEArd([1.], 1.), logNoise = -2.)
@@ -71,7 +70,7 @@ for k in 1:L
 
     obs_traj[:,k] = obs.posn
 
-    Ref  = [[6(k+i-1)*T, 2.] for i in 1:H₊]
+    Ref  = [[6(k+i-1)*T, 2.] for i in 1:H]
 
     if norm(robo.pose[1:2] - obs.posn) < robo.R
         @time Detection!(robo, obs, obsGP, mNN)
