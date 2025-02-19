@@ -111,7 +111,7 @@ function run_obs!(obs::obstacle, k::Int64, τ::Float64, scenario::Int64)
         end
     else #Straight move
         for i in 1:ns
-            obs.δpos[:,i] = Δτ*[0, -3.] + Δτ*rand(Uniform(-0.1, 0.1),2)
+            obs.δpos[:,i] = Δτ*[0, -3.5] + Δτ*rand(Uniform(-0.1, 0.1),2)
             obs.traj      = [obs.traj   obs.posn+sum(obs.δpos[:,k] for k in 1:i)]
         end
     end
