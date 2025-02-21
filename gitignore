@@ -44,7 +44,7 @@ Temporary Items
 *.cb
 *.cb2
 .*.lb
-.*png
+*.png
 
 ## Intermediate documents:
 *.dvi
@@ -337,4 +337,4 @@ codegen/
 *.slxc
 
 # Octave session info
-octave-workspace
+octave-workspaceß

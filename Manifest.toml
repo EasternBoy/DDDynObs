@@ -2,7 +2,7 @@
 
 julia_version = "1.10.8"
 manifest_format = "2.0"
-project_hash = "97e8b40e916bbe423424e4a941139dbcbea43b66"
+project_hash = "7dfd01d959d549729896e9fe576a4b82da530f02"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "fb97701c117c8162e84dfcf80215caa904aef44f"
@@ -72,6 +72,12 @@ deps = ["PtrArrays", "Random"]
 git-tree-sha1 = "9876e1e164b144ca45e9e3198d0b689cadfed9ff"
 uuid = "66dad0bd-aa9a-41b7-9441-69ab47430ed8"
 version = "1.1.3"
+
+[[deps.AppleAccelerate]]
+deps = ["Libdl", "LinearAlgebra"]
+git-tree-sha1 = "00163fcafc58970fb18e68ef5def1fde0b7cb692"
+uuid = "13e28ba4-7ad8-5781-acae-3021b1ed3924"
+version = "0.4.0"
 
 [[deps.ArgCheck]]
 git-tree-sha1 = "680b3b8759bd4c54052ada14e52355ab69e07876"
@@ -1607,6 +1613,12 @@ deps = ["Adapt", "ChainRulesCore", "Compat", "GPUArraysCore", "LinearAlgebra", "
 git-tree-sha1 = "c8c7f6bfabe581dc40b580313a75f1ecce087e27"
 uuid = "0b1bfda6-eb8a-41d2-88d8-f5af5cad476f"
 version = "0.2.6"
+
+[[deps.OpenBLAS32]]
+deps = ["LinearAlgebra", "OpenBLAS32_jll", "libblastrampoline_jll"]
+git-tree-sha1 = "56e1faf6427d9d7b330306c89ca37a488c471c91"
+uuid = "51095b67-9e93-468d-a683-508b52f74e81"
+version = "0.1.0"
 
 [[deps.OpenBLAS32_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl"]

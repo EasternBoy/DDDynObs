@@ -10,8 +10,9 @@ import Pkg
 using Pkg
 Pkg.activate(@__DIR__)
 # Pkg.instantiate()
-
+using AppleAccelerate, BenchmarkTools
 using Optim, Plots, JuMP, GaussianProcesses, LinearAlgebra, OrdinaryDiffEq, Flux, Random, Ipopt, Distributions
+
 
 
 
