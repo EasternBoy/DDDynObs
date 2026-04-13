@@ -79,7 +79,7 @@ function nMPC_avoid(robo::robot, obs::obstacle, ref::Vector{Vector{Float64}}, Pm
 
 
     JuMP.optimize!(opti)
-    print(is_solved_and_feasible(opti))
+    # print(is_solved_and_feasible(opti))
 
     x  = JuMP.value.(x)
     y  = JuMP.value.(y)

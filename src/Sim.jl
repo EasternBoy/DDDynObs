@@ -11,9 +11,18 @@ import Pkg
 using Pkg
 Pkg.activate(@__DIR__)
 
+# Pkg.instantiate()
+
 using Optim, Random, CSV, DataFrames, MAT,  Distributions
 using Plots, Dates, Statistics, Colors, ColorSchemes
 using Ipopt, JuMP, GaussianProcesses, LinearAlgebra, OrdinaryDiffEq, Flux
+
+
+# Resolve method ambiguity between GaussianProcesses and PDMats for current dependency versions.
+LinearAlgebra.ldiv!(A::GaussianProcesses.PDMats.PDMat, B::LinearAlgebra.AbstractVecOrMat) =
+    LinearAlgebra.ldiv!(A.chol, B)
+LinearAlgebra.ldiv!(A::GaussianProcesses.ElasticPDMats.ElasticPDMat, B::LinearAlgebra.AbstractVecOrMat) =
+    LinearAlgebra.ldiv!(A.chol, B)
 
 
 
@@ -39,7 +48,7 @@ pBounds = polyBound(str_ang, v_min, v_max, a_min, a_max)
 init  = [0., 2., 0., 6.]
 A     = [1. 0; -1. 0.; 0. 1.; 0. -1.]
 b     = [2.3, 2.3, 1., 1.]
-TypeOfObs = 1
+TypeOfObs = 2
 
 test_points = [10, 20, 30, 40, 50]
 obs_traj = zeros(2,L)
@@ -75,7 +84,7 @@ for k in 1:L
     Ref  = [[6(k+i-1)*T, 2.] for i in 1:H₊]
 
     if norm(robo.pose[1:2] - obs.posn) < robo.R
-        @time Detection!(robo, obs, obsGP, mNN)
+        Detection!(robo, obs, obsGP, mNN)
         δme = zeros(dim, ns*H)
         δva = zeros(dim, ns*H)
         for i in 1:dim
@@ -98,20 +107,20 @@ for k in 1:L
         Prob = [0.95  for i in 1:H]
         φ    = [quantile(Normal(0.,1.), (1 + Prob[i])/2)  for i in 1:H]
 
-        @time x, y, θ, v, tα, a = nMPC_avoid(robo, obs, Ref, Pmean, Pvar, φ)
+        x, y, θ, v, tα, a = nMPC_avoid(robo, obs, Ref, Pmean, Pvar, φ)
         robo.predPose = [x';y';θ';v']
         fig = plot_robot(robo, x, y, TypeOfObs,k)
         plot_obs(obs, Pmean, Pvar, φ)
         display(fig)
-        png(fig, "$k")
+        savefig(fig, string("figs/", k, ".pdf"))
         run!(robo, [tα[1], a[1]])
     else
-        @time x, y, θ, v, tα, a = nMPC_free(robo, Ref)
+        x, y, θ, v, tα, a = nMPC_free(robo, Ref)
         robo.predPose = [x';y';θ';v']
         fig = plot_robot(robo, x, y, TypeOfObs,k)
         plot_obs(obs)
         display(fig)
-        png(fig, "$k")
+        savefig(fig, string("figs/", k, ".pdf"))
         run!(robo, [tα[1], a[1]])
     end
 end

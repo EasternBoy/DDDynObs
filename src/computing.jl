@@ -49,25 +49,33 @@ end
 
 function trainNN(mNN::Chain, dataIn::AbstractVector, dataOut::AbstractArray; epochs = 400) #time series
 
-    X   = [[Float32.(x)] for x in dataIn]
-    Y   = Float32.(dataOut)
-    dim = minimum(size(dataOut))
+    X = [reshape(Float32[x], 1, 1) for x in dataIn]
+    Y = Matrix(Float32.(dataOut))
 
     bestloss        = Inf
     bestmodel       = mNN
     numincreases    = 0
     maxnumincreases = 50
 
-    data = [(X[i], Y[:, i]) for i in 1:length(X)]
-
-    loss(mNN, x, y) = norm(mNN(x) .- y)
-
     opt_state = Flux.setup(ADAM(1e-2), mNN)
 
     for epoch in 1:epochs
-        Flux.train!(loss, mNN, data, opt_state)
+        for i in eachindex(X)
+            x = X[i]
+            y = reshape(Y[:, i], :, 1)
 
-        lss = sum(loss(mNN, X[i], Y[:,i]) for i in 1:length(X))
+            Flux.reset!(mNN)
+            loss, grads = Flux.withgradient(mNN) do model
+                norm(model(x) .- y)
+            end
+            Flux.update!(opt_state, mNN, grads[1])
+        end
+
+        lss = 0.0f0
+        for i in eachindex(X)
+            Flux.reset!(mNN)
+            lss += norm(mNN(X[i]) .- reshape(Y[:, i], :, 1))
+        end
 
         if lss < 0.95bestloss
             bestloss  = lss
@@ -76,11 +84,12 @@ function trainNN(mNN::Chain, dataIn::AbstractVector, dataOut::AbstractArray; epo
         end
         numincreases > maxnumincreases ? break : nothing
     end
-    mNN = bestmodel
+    Flux.loadmodel!(mNN, bestmodel)
 end
 
 function predictLSTM(mNN::Chain, dataIn::Vector{Float64}; recal = 20) #time series
-    X = [[Float32.(x)] for x in dataIn]
+    X = [reshape(Float32[x], 1, 1) for x in dataIn]
+    Flux.reset!(mNN)
     for i in 1:recal
         for x in X
             mNN(x)
@@ -88,6 +97,7 @@ function predictLSTM(mNN::Chain, dataIn::Vector{Float64}; recal = 20) #time seri
     end
 
     res = zeros(2,0)
+    Flux.reset!(mNN)
     for x in X
         res = [res Float64.(mNN(x))]
     end

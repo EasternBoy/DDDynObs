@@ -1,47 +1,35 @@
 # DDDynObs
-Submitted to IROS2025
 
-Setup packages
+Dynamic obstacle avoidance simulations in Julia.
 
-Adapt v3.7.2
+## Reference
 
-BinaryBuilder v0.5.8
+[LEAP-O dia PDF](figs/LEAP-O_dia.pdf)
 
-ColorSchemes v3.25.0
+## Setup
 
-Colors v0.12.11
-Distributions v0.25.109
+This project uses the Julia environment in [`src/Project.toml`](src/Project.toml).
 
-Flux v0.13.17
+From the repository root:
 
-GR v0.73.6
+```bash
+julia --project=src -e 'using Pkg; Pkg.instantiate()'
+```
 
-GaussianProcesses v0.12.5
+## Run
 
-IJulia v1.25.0
+Run the single-obstacle simulation:
 
-Ipopt v1.6.3
+```bash
+julia --project=src src/Sim.jl
+```
 
-JuMP v1.22.2
+Run the multiple-obstacle simulation:
 
-MAT v0.10.7
-MathOptInterface v1.31.0 `https://github.com/jump-dev/MathOptInterface.jl.git#master`
+```bash
+julia --project=src src/Sim_mobs.jl
+```
 
-Optim v1.9.4
+## Output
 
-OrdinaryDiffEq v6.58.2
-
-Plots v1.40.5
-Requires v1.3.0 `https://github.com/JuliaPackaging/Requires.jl.git#master`
-
-StatsPlots v0.15.7
-
-OpenBLAS32_jll v0.3.17+0
-
-Dates
-
-LinearAlgebra
-
-Random
-
-Statistics
+Generated figures are written to `figs/`.
