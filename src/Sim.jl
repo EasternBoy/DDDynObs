@@ -1,7 +1,8 @@
 push!(LOAD_PATH, ".")
 dim = 2 
 T   = 0.1
-H   = 10
+H   = 6
+H₊  = 8
 L   = 60
 ns  = 3
 
@@ -11,9 +12,9 @@ using Pkg
 Pkg.activate(@__DIR__)
 
 # Pkg.instantiate()
-# Pkg.instantiate()
 
 using Optim, Plots, JuMP, GaussianProcesses, LinearAlgebra, OrdinaryDiffEq, Flux, Random, Ipopt, Distributions
+
 
 
 # Resolve method ambiguity between GaussianProcesses and PDMats for current dependency versions.
@@ -38,15 +39,15 @@ R = 20.
 str_ang =  0.6
 v_min   = -10.
 v_max   =  20.
-a_min   = -5.
-a_max   =  5.
+a_min   = -2.
+a_max   =  2.
 pBounds = polyBound(str_ang, v_min, v_max, a_min, a_max)
 
 
 init  = [0., 2., 0., 6.]
 A     = [1. 0; -1. 0.; 0. 1.; 0. -1.]
 b     = [2.3, 2.3, 1., 1.]
-TypeOfObs = 2
+TypeOfObs = 1
 
 test_points = [10, 20, 30, 40, 50]
 obs_traj = zeros(2,L)
@@ -54,32 +55,37 @@ pre_traj = zeros(2,H,L)
 mse_pre  = zeros(length(test_points))
 
 
+path_to_fig = ""
 if TypeOfObs == 1 #Sinusoid move
-    obs   = obstacle(2., [25., 0.], ns)
+    obs   = obstacle(2., [22., 0.], ns)
+    path_to_fig = "figs/sinusoid/"
 elseif TypeOfObs == 2 #Circle move
     obs   = obstacle(2., [18., -10.], ns)
+    path_to_fig = "figs/circle/"
 else #Straight move
     obs   = obstacle(2., [15., -15.], ns)
+    path_to_fig = "figs/straight/"
 end
+isdir(dirname(path_to_fig)) || mkdir(dirname(path_to_fig))
 
-robo  = robot(T, H, R, ℓ, pBounds, init, A, b)
+robo  = robot(T, H, H₊, R, ℓ, pBounds, init, A, b)
 
 obsGP    = Vector{GPBase}(undef, 2) #MeanPoly(ones(1,10))
 obsGP[1] = GPE(mean = MeanConst(1.), kernel = SEArd([1.], 1.), logNoise = -2.)
 obsGP[2] = GPE(mean = MeanConst(1.), kernel = SEArd([1.], 1.), logNoise = -2.)
-mNN      = Chain(RNN(1 => 8), Dense(8 => 2))
+mNN      = Chain(RNN(1 => 16, tanh), Dense(16 => 2, tanh))
 
 
 # Run simulation
 println("Now start the simulation")
 for k in 1:L
-    println("Step $k:")
+    println("Time instance $k")
 
     run_obs!(obs, k-1, T, TypeOfObs)
 
     obs_traj[:,k] = obs.posn
 
-    Ref  = [[6(k+i-1)*T, 2.] for i in 1:H]
+    Ref  = [[6(k+i-1)*T, 2.] for i in 1:H₊]
 
     if norm(robo.pose[1:2] - obs.posn) < robo.R
         Detection!(robo, obs, obsGP, mNN)
@@ -110,7 +116,7 @@ for k in 1:L
         fig = plot_robot(robo, x, y, TypeOfObs,k)
         plot_obs(obs, Pmean, Pvar, φ)
         display(fig)
-        savefig(fig, string("figs/", k, ".pdf"))
+        savefig(fig, string(path, k, ".pdf"))
         run!(robo, [tα[1], a[1]])
     else
         x, y, θ, v, tα, a = nMPC_free(robo, Ref)
@@ -118,7 +124,7 @@ for k in 1:L
         fig = plot_robot(robo, x, y, TypeOfObs,k)
         plot_obs(obs)
         display(fig)
-        savefig(fig, string("figs/", k, ".pdf"))
+        savefig(fig, string(path, k, ".pdf"))
         run!(robo, [tα[1], a[1]])
     end
 end

@@ -11,11 +11,9 @@ import Pkg
 using Pkg
 Pkg.activate(@__DIR__)
 
-# Pkg.instantiate()
+Pkg.instantiate()
 
-using Optim, Random, CSV, DataFrames, MAT, Distributions
-using Plots, Dates, Statistics, Colors, ColorSchemes
-using Ipopt, JuMP, GaussianProcesses, LinearAlgebra, OrdinaryDiffEq, Flux
+using Optim, Plots, JuMP, GaussianProcesses, LinearAlgebra, OrdinaryDiffEq, Flux, Random, Ipopt, Distributions
 
 
 # Resolve method ambiguity between GaussianProcesses and PDMats for current dependency versions.
