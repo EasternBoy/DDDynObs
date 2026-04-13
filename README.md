@@ -4,11 +4,11 @@ Dynamic obstacle avoidance simulations in Julia.
 
 ## Reference
 
-[LEAP-O dia PDF](figs/LEAP-O_dia.pdf)
+[![LEAP-O diagram](figs/LEAP-O_dia.png)](figs/LEAP-O_dia.pdf)
 
 ## Setup
 
-This project uses the Julia environment in [`src/Project.toml`](src/Project.toml).
+This project uses the Julia environment defined in [`src/Project.toml`](src/Project.toml) and locked by [`src/Manifest.toml`](src/Manifest.toml).
 
 From the repository root:
 
